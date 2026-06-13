@@ -152,7 +152,7 @@ try:
             daily_change_pct = 0.0
 
         is_korean = '.KS' in ticker or '.KQ' in ticker
-        usd_to_krw = 1380
+        usd_to_krw = 1500
 
         def fmt(price, kr):
             return f"₩{int(price):,}" if kr else f"${price:,.2f}"
@@ -247,4 +247,4 @@ try:
 except Exception as e:
     st.error(f"오류: {str(e)}")
 
-st.caption("📈 주식 분석 | Yahoo Finance + Finnhub | 참고용입니다.")
+st.caption("📈 주식 분석 | Yahoo Finance + Finnhub | 참고용입니다.(달러 환율 1500으로 설정했습니다!!)")
