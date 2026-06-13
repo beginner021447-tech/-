@@ -11,7 +11,6 @@ st.markdown("""
     .main { background-color: #0F0F0F; color: #EDEDED; }
     .stApp { background-color: #0F0F0F; }
     h1 { color: #00C4B4; font-weight: bold; font-size: 1.8rem; }
-    h2, h3 { color: #00C4B4; }
     .price-box {
         background-color: #1A1A1A;
         border: 2px solid #00C4B4;
@@ -77,8 +76,7 @@ korean_name_map = {     # ==================== 코스피 대형주 =============
     "EA": "EA", "TTWO": "테이크투인터랙티브", "SPOT": "스포티파이",
     "COST": "코스트코", "LLY": "일라이릴리", "UNH": "유나이티드헬스",
     "JNJ": "존슨앤드존슨", "V": "비자", "MA": "마스터카드",
-    "BRK.B": "버크셔해서웨이", "ISRG": "인튜이티브서지컬", "REGN": "리제네론", }  # 이전에 사용하던 큰 딕셔너리 그대로 사용
-
+    "BRK.B": "버크셔해서웨이", "ISRG": "인튜이티브서지컬", "REGN": "리제네론", }   # 기존에 사용하던 큰 딕셔너리 그대로 사용
 popular_stocks = {v: k for k, v in korean_name_map.items()}
 
 search_query = st.text_input("회사명 또는 종목코드 검색", placeholder="삼성전자, 005930, AAPL...")
@@ -95,7 +93,7 @@ if search_query:
 
 company_name = korean_name_map.get(ticker, ticker)
 
-# ==================== 데이터 로드 ====================
+# ==================== 기본 데이터 ====================
 stock = yf.Ticker(ticker)
 df = stock.history(period="1y")
 info = stock.info
@@ -105,7 +103,6 @@ if df.empty:
 else:
     current_price = float(df['Close'].iloc[-1])
     daily_change_pct = ((current_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100 if len(df) >= 2 else 0
-
     is_korean = '.KS' in ticker or '.KQ' in ticker
     usd_to_krw = 1380
 
@@ -113,105 +110,75 @@ else:
         return f"₩{int(price):,}" if kr else f"${price:,.2f}"
 
     # Finnhub 실시간
-    realtime_info = ""
     if FINNHUB_API_KEY:
         realtime = get_finnhub_price(ticker, FINNHUB_API_KEY)
         if realtime:
             current_price = realtime["current"]
             daily_change_pct = ((current_price - realtime["prev_close"]) / realtime["prev_close"]) * 100
-            realtime_info = f" | 실시간: {realtime['time']}"
-            st.success(f"✅ Finnhub 실시간 가격 적용 완료 ({realtime['time']})")
 
-    if is_korean:
-        main_price = fmt(current_price, True)
-        sub_price = f"(${current_price / usd_to_krw:.2f})"
-        curr_label = "🇰🇷 한국 원화 (달러 참고)"
-    else:
-        main_price = fmt(current_price, False)
-        sub_price = f"(₩{current_price * usd_to_krw:,.0f})"
-        curr_label = "🇺🇸 달러 (원화 참고)"
-
-    # ==================== 기본 정보 표시 ====================
-    col_name, col_btn = st.columns([5, 1.5])
+    # ==================== 상단 정보 ====================
+    col_name, col1, col2 = st.columns([4, 1.3, 1.3])
     with col_name:
         st.subheader(f"{company_name} ({ticker})")
-    with col_btn:
+    with col1:
         q = f"{ticker} OR {company_name.split()[0]}" if is_korean else f"${ticker}"
         st.link_button("커뮤니티", f"https://x.com/search?q={q}&src=typed_query&f=live", use_container_width=True)
+    with col2:
+        if st.button("📊 일봉 분석", use_container_width=True):
+            st.session_state.show_daily_analysis = True
 
-    st.caption(f"{curr_label}{realtime_info}")
-
-    # 현재가 박스
+    # 현재가
     st.markdown(f"""
     <div class="price-box">
         <div style="color:#AAAAAA; font-size:1rem;">현재가</div>
-        <div class="price-main">{main_price}</div>
-        <div style="color:#AAAAAA; font-size:1.2rem;">{sub_price}</div>
+        <div class="price-main">{fmt(current_price, is_korean)}</div>
+        <div style="color:#AAAAAA; font-size:1.2rem;">{f"(${current_price / usd_to_krw:.2f})" if is_korean else f"(₩{current_price * usd_to_krw:,.0f})"}</div>
         <div style="font-size:1.6rem; margin-top:8px; color:{'#00C853' if daily_change_pct >= 0 else '#FF5252'}">
             {daily_change_pct:+.2f}%
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ==================== 일봉 차트 분석 버튼 ====================
-    if st.button("📊 일봉 차트 분석", use_container_width=True):
-        with st.spinner("일봉 기준으로 분석 중..."):
-            # 일봉 데이터
-            daily_df = stock.history(period="1y", interval="1d")
+    # ==================== 일봉 분석 영역 ====================
+    if st.session_state.get("show_daily_analysis", False):
+        st.subheader("📊 일봉 차트 분석")
 
-            # 일봉 기술적 지표
-            daily_delta = daily_df['Close'].diff()
-            daily_gain = (daily_delta.where(daily_delta > 0, 0)).rolling(window=14).mean()
-            daily_loss = (-daily_delta.where(daily_delta < 0, 0)).rolling(window=14).mean()
-            daily_rs = daily_gain / daily_loss
-            daily_rsi = 100 - (100 / (1 + daily_rs))
-            daily_rsi_value = float(daily_rsi.iloc[-1])
+        daily_df = stock.history(period="1y", interval="1d")
 
-            daily_ma20 = daily_df['Close'].rolling(20).mean().iloc[-1]
-            daily_ma60 = daily_df['Close'].rolling(60).mean().iloc[-1]
+        # 일봉 RSI
+        delta = daily_df['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        rsi = 100 - (100 / (1 + gain / loss))
+        daily_rsi = float(rsi.iloc[-1])
 
-            daily_support = float(daily_df['Low'].rolling(20).min().iloc[-1])
-            daily_resistance = float(daily_df['High'].rolling(20).max().iloc[-1])
+        daily_ma20 = daily_df['Close'].rolling(20).mean().iloc[-1]
+        daily_support = float(daily_df['Low'].rolling(20).min().iloc[-1])
+        daily_resistance = float(daily_df['High'].rolling(20).max().iloc[-1])
 
-            # 일봉 분석 판단
-            if current_price > daily_ma20 and daily_rsi_value < 70:
-                daily_judgment = "상승 추세 유지 중"
-                daily_reason = "20일 이동평균 위에서 거래되고 있으며, RSI도 과매수 구간이 아닙니다."
-            elif current_price < daily_ma20 and daily_rsi_value > 30:
-                daily_judgment = "조정 중"
-                daily_reason = "20일 이동평균을 하회하고 있으며, 단기 모멘텀이 약합니다."
-            elif daily_rsi_value > 70:
-                daily_judgment = "단기 과열"
-                daily_reason = "RSI가 70을 상회하여 단기 조정 위험이 있습니다."
-            elif daily_rsi_value < 30:
-                daily_judgment = "단기 과매도"
-                daily_reason = "RSI가 30 이하로 단기 반등 가능성이 있습니다."
-            else:
-                daily_judgment = "중립"
-                daily_reason = "뚜렷한 방향성 없이 횡보 중입니다."
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("일봉 RSI (14)", f"{daily_rsi:.1f}")
+            st.metric("20일 이동평균 대비", "상회" if current_price > daily_ma20 else "하회")
+        with col2:
+            st.metric("일봉 지지선", fmt(daily_support, is_korean))
+            st.metric("일봉 저항선", fmt(daily_resistance, is_korean))
 
-            st.subheader("📊 일봉 차트 분석 결과")
+        # 일봉 기반 간단 분석
+        if daily_rsi < 35:
+            daily_comment = "단기 과매도 구간으로 반등 가능성이 있습니다."
+        elif daily_rsi > 65:
+            daily_comment = "단기 과매수 구간으로 조정 위험이 있습니다."
+        elif current_price > daily_ma20:
+            daily_comment = "상승 추세가 유지되고 있습니다."
+        else:
+            daily_comment = "조정 중이며 방향성을 확인해야 합니다."
 
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("일봉 RSI (14)", f"{daily_rsi_value:.1f}")
-                st.metric("20일 이동평균 대비", "상회" if current_price > daily_ma20 else "하회")
-            with col2:
-                st.metric("일봉 지지선", fmt(daily_support, is_korean))
-                st.metric("일봉 저항선", fmt(daily_resistance, is_korean))
+        st.info(f"**일봉 분석 코멘트**: {daily_comment}")
 
-            st.markdown(f"""
-            **일봉 판단**: {daily_judgment}  
-            **이유**: {daily_reason}
-            """)
+        if st.button("일봉 분석 닫기"):
+            st.session_state.show_daily_analysis = False
+            st.rerun()
 
-            # 일봉 기반 간단 추천
-            if daily_rsi_value < 35 and current_price > daily_ma20:
-                st.success("일봉 기준: 단기 반등 기대 가능 구간")
-            elif daily_rsi_value > 65:
-                st.warning("일봉 기준: 단기 조정 리스크 존재")
-            else:
-                st.info("일봉 기준: 방향성 관망 구간")
-
-# ==================== 기존 기본 분석 (재무 + 기술 + 종합 의견) ====================
-# (이전 코드의 재무 지표, 기술적 신호, 종합 의견 부분 그대로 유지)
+    # ==================== 기존 기본 분석 유지 ====================
+    # (재무 지표, 기술적 신호, 종합 의견, 추천 가격 등 이전 코드 그대로 유지)
