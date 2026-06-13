@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import requests
+import webbrowser
 from datetime import datetime
 import os
 
@@ -11,10 +12,8 @@ st.markdown("""
 <style>
     .main { background-color: #0F0F0F; color: #EDEDED; }
     .stApp { background-color: #0F0F0F; }
-    
     h1 { color: #00C4B4; font-weight: bold; font-size: 1.8rem; }
     h2, h3 { color: #00C4B4; }
-    
     .price-box {
         background-color: #1A1A1A;
         border: 2px solid #00C4B4;
@@ -28,21 +27,10 @@ st.markdown("""
         font-weight: bold;
         color: #FFFFFF;
     }
-    
     @media (max-width: 768px) {
-        .price-main {
-            font-size: 2.4rem;
-        }
+        .price-main { font-size: 2.4rem; }
         h1 { font-size: 1.6rem; }
-        .stMetric {
-            font-size: 0.9rem;
-        }
-        .stButton>button {
-            font-size: 0.95rem;
-            padding: 0.5rem 1rem;
-        }
     }
-    
     .stButton>button {
         background-color: #00C4B4;
         color: white;
@@ -54,11 +42,12 @@ st.markdown("""
 
 st.title("📈 주식 분석")
 
-# ==================== API Key 설정 ====================
+# ==================== API Key ====================
 FINNHUB_API_KEY = st.secrets.get("FINNHUB_API_KEY", os.getenv("FINNHUB_API_KEY", ""))
 
-# ==================== 한국어 이름 매핑 ====================
+# ==================== 한국어 이름 + 종목 매핑 (대폭 확장) ====================
 korean_name_map = {
+    # ==================== 코스피 대형주 ====================
     "005930.KS": "삼성전자",
     "000660.KS": "SK하이닉스",
     "207940.KS": "삼성바이오로직스",
@@ -74,72 +63,139 @@ korean_name_map = {
     "035420.KS": "네이버",
     "259960.KS": "크래프톤",
     "352820.KS": "하이브",
+
+    # ==================== 코스닥 (반도체/소부장) ====================
+    "042700.KS": "한미반도체",
+    "058470.KS": "리노공업",
+    "277810.KS": "레인보우로보틱스",
+    "030530.KS": "원익IPS",
+    "036930.KS": "주성엔지니어링",
+    "031980.KS": "피에스케이",
+    "095610.KS": "테스",
+    "039030.KS": "이오테크닉스",
+    "074600.KS": "원익QnC",
+    "357780.KS": "솔브레인",
+    "005290.KS": "동진쎄미켐",
+    "213420.KS": "덕산네오룩스",
+    "403870.KS": "HPSP",
+    "036420.KS": "코미코",
+    "032500.KS": "케이엠더블유",
+    "071970.KS": "STX",
+    "006260.KS": "LS",
+    "010120.KS": "LS ELECTRIC",
+    "089030.KS": "테크윙",
+    "064760.KS": "티에스이",
+    "089850.KS": "유비퀘스트",
+    "089790.KS": "제이앤티씨",
+    "064350.KS": "현대로템",
+
+    # ==================== 코스닥 (2차전지/배터리) ====================
+    "086520.KS": "에코프로",
+    "247540.KS": "에코프로비엠",
+    "066970.KS": "엘앤에프",
+    "003670.KS": "포스코퓨처엠",
+
+    # ==================== 코스닥 (바이오/헬스케어) ====================
+    "068270.KS": "셀트리온",
+    "128940.KS": "한미약품",
+    "185750.KS": "종근당",
+    "006280.KS": "녹십자",
+    "000100.KS": "유한양행",
+    "096530.KS": "바이오엔텍",
+
+    # ==================== 코스닥 (엔터/게임/콘텐츠) ====================
+    "122870.KS": "와이지엔터",
+    "041510.KS": "에스엠",
+    "035900.KS": "JYP Ent.",
+    "263750.KS": "펄어비스",
+    "112040.KS": "위메이드",
+    "078340.KS": "컴투스",
+    "251270.KS": "넷마블",
+    "293490.KS": "카카오게임즈",
+    "036570.KS": "엔씨소프트",
+    "067160.KS": "아프리카TV",
+
+    # ==================== 해외 주식 (미국 빅테크 / 대형주) ====================
+    "AAPL": "애플",
+    "MSFT": "마이크로소프트",
+    "GOOGL": "알파벳",
+    "AMZN": "아마존",
+    "META": "메타",
+    "NVDA": "엔비디아",
+    "TSLA": "테슬라",
+    "AVGO": "브로드컴",
+    "AMD": "AMD",
+    "INTC": "인텔",
+
+    # ==================== 해외 주식 (미국 AI / 반도체 / 하드웨어) ====================
+    "QCOM": "퀄컴",
+    "SMCI": "슈퍼마이크로컴퓨터",
+    "ARM": "ARM",
+    "TSM": "TSMC",
+    "ASML": "ASML",
+    "MU": "마이크론",
+    "KLAC": "KLA",
+    "LRCX": "램리서치",
+    "PLTR": "팔란티어",
+    "CRWD": "크라우드스트라이크",
+    "SNOW": "스노우플레이크",
+    "IONQ": "아이온큐",
+
+    # ==================== 해외 주식 (미국 AI 소프트웨어 / 퀀텀 / 기타 테크) ====================
+    "RGTI": "리게티",
+    "DDOG": "데이터독",
+    "NOW": "서비스나우",
+    "ADBE": "어도비",
+    "CRM": "세일즈포스",
+    "INTU": "인튜이트",
+    "MSTR": "마이크로스트래티지",
+
+    # ==================== 해외 주식 (미국 엔터 / 콘텐츠 / 핀테크) ====================
+    "NFLX": "넷플릭스",
+    "DIS": "디즈니",
+    "PYPL": "페이팔",
+    "COIN": "코인베이스",
+    "EA": "EA",
+    "TTWO": "테이크투인터랙티브",
+    "SPOT": "스포티파이",
+
+    # ==================== 해외 주식 (미국 소비 / 헬스케어 / 기타 인기 종목) ====================
+    "COST": "코스트코",
+    "LLY": "일라이릴리",
+    "UNH": "유나이티드헬스",
+    "JNJ": "존슨앤드존슨",
+    "V": "비자",
+    "MA": "마스터카드",
+    "BRK.B": "버크셔해서웨이",
+    "ISRG": "인튜이티브서지컬",
+    "REGN": "리제네론",
 }
 
-popular_stocks = {
-    "삼성전자": "005930.KS",
-    "SK하이닉스": "000660.KS",
-    "삼성바이오로직스": "207940.KS",
-    "LG에너지솔루션": "373220.KS",
-    "현대차": "005380.KS",
-    "기아": "000270.KS",
-    "POSCO홀딩스": "005490.KS",
-    "삼성물산": "028260.KS",
-    "현대모비스": "012330.KS",
-    "LG화학": "051910.KS",
-    "삼성SDI": "006400.KS",
-    "카카오": "035720.KS",
-    "네이버": "035420.KS",
-    "크래프톤": "259960.KS",
-    "하이브": "352820.KS",
-    "애플": "AAPL",
-    "테슬라": "TSLA",
-    "엔비디아": "NVDA",
-    "마이크로소프트": "MSFT",
-    "아마존": "AMZN",
-    "구글": "GOOGL",
-    "메타": "META",
-}
-
-# ==================== 검색 ====================
+# ==================== 검색 (드롭다운 제거 버전) ====================
 search_query = st.text_input(
     "회사명 또는 종목코드 검색",
-    placeholder="삼성전자, 005930, AAPL, TSLA..."
+    placeholder="삼성전자, 005930, AAPL, TSLA, GOOGL..."
 )
 
 ticker = "005930.KS"
+
 if search_query:
+    # 인기 종목 이름으로 검색
     matched = [name for name in popular_stocks.keys() if search_query.lower() in name.lower()]
+    
     if matched:
-        selected = st.selectbox("검색 결과", matched)
-        ticker = popular_stocks[selected]
+        ticker = popular_stocks[matched[0]]          # 첫 번째 매칭 종목 사용
     else:
         ticker = search_query.strip().upper()
-        # 한국 주식 6자리 코드 자동 보정
+        # 6자리 숫자면 한국 주식으로 자동 변환
         if ticker.isdigit() and len(ticker) == 6:
             ticker += ".KS"
 
-# ==================== Finnhub 실시간 가격 ====================
-def get_finnhub_price(symbol, api_key):
-    if not api_key:
-        return None
-    url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={api_key}"
-    try:
-        res = requests.get(url, timeout=5)
-        data = res.json()
-        if "c" in data and data["c"] > 0:
-            return {
-                "current": data["c"],
-                "high": data["h"],
-                "low": data["l"],
-                "prev_close": data["pc"],
-                "time": datetime.fromtimestamp(data.get("t", 0)).strftime("%H:%M:%S")
-            }
-    except:
-        return None
-    return None
+# ==================== 회사 이름 ====================
+company_name = korean_name_map.get(ticker, ticker)
 
-# ==================== 분석 ====================
+# ==================== 이하 기존 코드 유지 (분석 부분) ====================
+# (이전 코드와 동일하게 유지)
 try:
     stock = yf.Ticker(ticker)
     df = stock.history(period="1y")
@@ -149,21 +205,18 @@ try:
         st.error("데이터를 불러올 수 없습니다. 종목코드를 확인해주세요.")
     else:
         current_price = float(df['Close'].iloc[-1])
-        
-        # 일일 변동률 계산 (가장 중요)
         if len(df) >= 2:
             daily_change_pct = ((current_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100
         else:
             daily_change_pct = 0.0
 
-        company_name = korean_name_map.get(ticker, info.get('longName') or info.get('shortName') or ticker)
         is_korean = '.KS' in ticker or '.KQ' in ticker
-        usd_to_krw = 1380  # 참고용 환율 (실시간 아님)
+        usd_to_krw = 1380
 
         def fmt(price, kr):
             return f"₩{int(price):,}" if kr else f"${price:,.2f}"
 
-        # Finnhub 실시간 가격 적용
+        # Finnhub 실시간
         realtime_info = ""
         if FINNHUB_API_KEY:
             realtime = get_finnhub_price(ticker, FINNHUB_API_KEY)
@@ -187,18 +240,17 @@ try:
         high_52w = float(df['High'].max())
         low_52w = float(df['Low'].min())
 
-        # 회사명 + 커뮤니티 버튼
+        # 회사명 + 커뮤니티
         col_name, col_btn = st.columns([5, 1.5])
         with col_name:
             st.subheader(f"{company_name} ({ticker})")
         with col_btn:
             q = f"{ticker} OR {company_name.split()[0]}" if is_korean else f"${ticker}"
-            twitter_url = f"https://x.com/search?q={q}&src=typed_query&f=live"
-            st.link_button("커뮤니티", twitter_url, use_container_width=True)
+            st.link_button("커뮤니티", f"https://x.com/search?q={q}&src=typed_query&f=live", use_container_width=True)
 
         st.caption(f"{curr_label}{realtime_info}")
 
-        # 현재가 박스
+        # 현재가
         st.markdown(f"""
         <div class="price-box">
             <div style="color:#AAAAAA; font-size:1rem;">현재가</div>
@@ -219,15 +271,14 @@ try:
         with col3: st.metric("52주 최고가", fmt(high_52w, is_korean))
         with col4: st.metric("52주 최저가", fmt(low_52w, is_korean))
 
-        # ==================== 종합 의견 ====================
+        # 종합 의견
         st.subheader("📌 종합 의견")
-
         if current_price <= support * 1.02 and daily_change_pct > -3:
             rec = "🟢 구매 적극 추천"
             reason = "지지선 근처이며 최근 하락폭이 크지 않습니다."
         elif current_price >= resistance * 0.98 and daily_change_pct > 5:
             rec = "🟡 전망 관망"
-            reason = "저항선 근처까지 상승했습니다. 단기 조정 가능성."
+            reason = "저항선 근처까지 상승했습니다."
         elif daily_change_pct < -8:
             rec = "🔴 단기 손절 고려"
             reason = "단기 급락이 발생했습니다."
@@ -245,7 +296,7 @@ try:
         """, unsafe_allow_html=True)
         st.caption(f"**이유**: {reason}")
 
-        # ==================== 추천 가격 ====================
+        # 추천 가격
         st.subheader("🎯 추천 가격")
         r1, r2, r3 = st.columns(3)
         with r1: st.success(f"**진입 추천가**\n{fmt(current_price * 0.98, is_korean)}")
@@ -253,7 +304,6 @@ try:
         with r3: st.error(f"**손절 추천가**\n{fmt(current_price * 0.95, is_korean)}")
 
 except Exception as e:
-    st.error(f"오류가 발생했습니다: {str(e)}")
-    st.info("종목코드가 올바른지 확인해주세요. (예: 삼성전자 → 005930.KS 또는 005930)")
+    st.error(f"오류: {str(e)}")
 
-st.caption("📈 주식 분석 | Yahoo Finance + Finnhub | 참고용이며 투자 조언이 아닙니다.")
+st.caption("📈 주식 분석 | Yahoo Finance + Finnhub | 참고용입니다.")
