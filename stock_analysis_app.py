@@ -6,7 +6,7 @@ import os
 
 st.set_page_config(page_title="주식 분석", layout="wide", page_icon="📈")
 
-# ==================== 모바일 최적화 스타일 ====================
+# ==================== 스타일 ====================
 st.markdown("""
 <style>
     .main { background-color: #0F0F0F; color: #EDEDED; }
@@ -26,25 +26,14 @@ st.markdown("""
         font-weight: bold;
         color: #FFFFFF;
     }
-    @media (max-width: 768px) {
-        .price-main { font-size: 2.4rem; }
-        h1 { font-size: 1.6rem; }
-    }
-    .stButton>button {
-        background-color: #00C4B4;
-        color: white;
-        border-radius: 10px;
-        font-weight: bold;
-    }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("📈 주식 분석")
 
-# ==================== API Key ====================
 FINNHUB_API_KEY = st.secrets.get("FINNHUB_API_KEY", os.getenv("FINNHUB_API_KEY", ""))
 
-# ==================== 한국어 이름 + 종목 매핑 (사용자 제공 버전) ====================
+# ==================== 종목 매핑 ====================
 korean_name_map = {
     # ==================== 코스피 대형주 ====================
     "005930.KS": "삼성전자", "000660.KS": "SK하이닉스", "207940.KS": "삼성바이오로직스",
@@ -93,17 +82,13 @@ korean_name_map = {
     "BRK.B": "버크셔해서웨이", "ISRG": "인튜이티브서지컬", "REGN": "리제네론",
 }
 
-# ==================== popular_stocks 자동 생성 ====================
+
 popular_stocks = {v: k for k, v in korean_name_map.items()}
 
 # ==================== 검색 ====================
-search_query = st.text_input(
-    "회사명 또는 종목코드 검색",
-    placeholder="삼성전자, 005930, AAPL, TSLA, GOOGL..."
-)
+search_query = st.text_input("회사명 또는 종목코드 검색", placeholder="삼성전자, 005930, AAPL, TSLA...")
 
 ticker = "005930.KS"
-
 if search_query:
     matched = [name for name in popular_stocks.keys() if search_query.lower() in name.lower()]
     if matched:
@@ -113,10 +98,9 @@ if search_query:
         if ticker.isdigit() and len(ticker) == 6:
             ticker += ".KS"
 
-# ==================== 회사 이름 ====================
 company_name = korean_name_map.get(ticker, ticker)
 
-# ==================== Finnhub 실시간 가격 함수 ====================
+# ==================== Finnhub 실시간 가격 ====================
 def get_finnhub_price(symbol, api_key):
     if not api_key:
         return None
@@ -143,19 +127,34 @@ try:
     info = stock.info
 
     if df.empty:
-        st.error("데이터를 불러올 수 없습니다. 종목코드를 확인해주세요.")
+        st.error("데이터를 불러올 수 없습니다.")
     else:
         current_price = float(df['Close'].iloc[-1])
-        if len(df) >= 2:
-            daily_change_pct = ((current_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100
-        else:
-            daily_change_pct = 0.0
+        daily_change_pct = ((current_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100 if len(df) >= 2 else 0
 
         is_korean = '.KS' in ticker or '.KQ' in ticker
-        usd_to_krw = 1500
+        usd_to_krw = 1380
 
         def fmt(price, kr):
             return f"₩{int(price):,}" if kr else f"${price:,.2f}"
+
+        # === 기본 재무 지표 ===
+        per = info.get('trailingPE')
+        pbr = info.get('priceToBook')
+        eps = info.get('trailingEps')
+        roe = info.get('returnOnEquity')
+
+        # === RSI 계산 ===
+        delta = df['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        current_rsi = float(rsi.iloc[-1]) if not rsi.empty else None
+
+        # === 이동평균선 신호 ===
+        ma20 = df['Close'].rolling(20).mean().iloc[-1]
+        ma_signal = "상승 추세" if current_price > ma20 else "하락 추세"
 
         # Finnhub 실시간 적용
         realtime_info = ""
@@ -203,7 +202,25 @@ try:
         </div>
         """, unsafe_allow_html=True)
 
-        # 지표
+        # ==================== 기본 재무 지표 ====================
+        st.subheader("📊 기본 재무 지표")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1: st.metric("PER", f"{per:.2f}" if per else "N/A")
+        with col2: st.metric("PBR", f"{pbr:.2f}" if pbr else "N/A")
+        with col3: st.metric("EPS", f"{eps:.2f}" if eps else "N/A")
+        with col4: st.metric("ROE", f"{roe*100:.2f}%" if roe else "N/A")
+
+        # ==================== 기술적 신호 ====================
+        st.subheader("📈 기술적 신호")
+        col1, col2 = st.columns(2)
+        with col1:
+            if current_rsi:
+                rsi_status = "과매수" if current_rsi > 70 else "과매도" if current_rsi < 30 else "중립"
+                st.metric("RSI (14일)", f"{current_rsi:.1f} ({rsi_status})")
+        with col2:
+            st.metric("20일 이동평균 대비", ma_signal)
+
+        # 지지/저항/52주
         col1, col2 = st.columns(2)
         with col1: st.metric("지지선 (20일)", fmt(support, is_korean))
         with col2: st.metric("저항선 (20일)", fmt(resistance, is_korean))
@@ -212,30 +229,45 @@ try:
         with col3: st.metric("52주 최고가", fmt(high_52w, is_korean))
         with col4: st.metric("52주 최저가", fmt(low_52w, is_korean))
 
-        # 종합 의견
+        # ==================== 종합 의견 (구조화) ====================
         st.subheader("📌 종합 의견")
-        if current_price <= support * 1.02 and daily_change_pct > -3:
-            rec = "🟢 구매 적극 추천"
-            reason = "지지선 근처이며 최근 하락폭이 크지 않습니다."
-        elif current_price >= resistance * 0.98 and daily_change_pct > 5:
-            rec = "🟡 전망 관망"
-            reason = "저항선 근처까지 상승했습니다."
-        elif daily_change_pct < -8:
-            rec = "🔴 단기 손절 고려"
-            reason = "단기 급락이 발생했습니다."
-        else:
-            rec = "🔵 홀딩 추천"
-            reason = "특별한 과열·과매도 신호가 없습니다."
 
-        color = "#00C853" if "구매" in rec else "#FF5252" if "손절" in rec else "#FFD700" if "관망" in rec else "#00B0FF"
+        # 간단한 판단 로직
+        if current_price <= support * 1.02 and daily_change_pct > -3:
+            judgment = "🟢 구매 적극 추천"
+            strength = "지지선 근처에서 가격이 안정적이며, 최근 하락폭이 크지 않습니다."
+            weakness = "단기 반등이 나오더라도 강한 상승 모멘텀은 아직 확인되지 않았습니다."
+            risk = "추가 하락 시 지지선 이탈 가능성이 존재합니다."
+        elif current_price >= resistance * 0.98 and daily_change_pct > 5:
+            judgment = "🟡 전망 관망"
+            strength = "상승 추세가 이어지고 있으며 단기 모멘텀이 양호합니다."
+            weakness = "저항선에 근접해 단기 조정 위험이 있습니다."
+            risk = "단기 차익실현 매물이 나올 가능성이 있습니다."
+        elif daily_change_pct < -8:
+            judgment = "🔴 단기 손절 고려"
+            strength = "가격 조정이 깊게 진행되었습니다."
+            weakness = "단기 모멘텀이 약하고 추가 하락 위험이 있습니다."
+            risk = "지지가 약해 추가 급락 가능성이 있습니다."
+        else:
+            judgment = "🔵 홀딩 추천"
+            strength = "특별한 과열이나 과매도 신호가 보이지 않습니다."
+            weakness = "강한 상승 모멘텀도, 뚜렷한 하락 신호도 없는 중립 구간입니다."
+            risk = "방향성이 명확하지 않아 단기 변동성이 지속될 수 있습니다."
+
+        color = "#00C853" if "구매" in judgment else "#FF5252" if "손절" in judgment else "#FFD700" if "관망" in judgment else "#00B0FF"
 
         st.markdown(f"""
         <div style="background-color:{color}15; border:2px solid {color}; 
                     padding:16px; border-radius:12px; text-align:center; font-size:1.3rem; font-weight:bold; color:{color};">
-            {rec}
+            {judgment}
         </div>
         """, unsafe_allow_html=True)
-        st.caption(f"**이유**: {reason}")
+
+        st.markdown(f"""
+        **강점**: {strength}  
+        **약점**: {weakness}  
+        **리스크**: {risk}
+        """)
 
         # 추천 가격
         st.subheader("🎯 추천 가격")
@@ -247,4 +279,4 @@ try:
 except Exception as e:
     st.error(f"오류: {str(e)}")
 
-st.caption("📈 주식 분석 | Yahoo Finance + Finnhub | 참고용입니다.(달러 환율 1500으로 설정했습니다!!)")
+st.caption("📈 주식 분석 | Yahoo Finance + Finnhub | 참고용입니다.")
