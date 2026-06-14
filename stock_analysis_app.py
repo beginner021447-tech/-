@@ -32,9 +32,19 @@ st.title("📈 주식 분석")
 
 FINNHUB_API_KEY = st.secrets.get("FINNHUB_API_KEY", os.getenv("FINNHUB_API_KEY", ""))
 
+# ==================== 자동 새로고침 설정 ====================
+with st.expander("⚙️ 자동 새로고침 설정", expanded=False):
+    auto_refresh = st.checkbox("자동 새로고침 사용", value=False)
+    refresh_interval = st.slider("새로고침 간격 (초)", min_value=15, max_value=120, value=60, step=15)
+
+# 자동 새로고침 실행
+if auto_refresh:
+    from streamlit_autorefresh import st_autorefresh
+    st_autorefresh(interval=refresh_interval * 1000, key="autorefresh")
+
 # ==================== 종목 매핑 ====================
 korean_name_map = {
-  # ==================== 코스피 대형주 ====================
+    # ==================== 코스피 대형주 ====================
     "005930.KS": "삼성전자", "000660.KS": "SK하이닉스", "207940.KS": "삼성바이오로직스",
     "373220.KS": "LG에너지솔루션", "005380.KS": "현대차", "000270.KS": "기아",
     "005490.KS": "POSCO홀딩스", "028260.KS": "삼성물산", "012330.KS": "현대모비스",
