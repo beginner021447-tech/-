@@ -34,7 +34,7 @@ FINNHUB_API_KEY = st.secrets.get("FINNHUB_API_KEY", os.getenv("FINNHUB_API_KEY",
 
 # ==================== 종목 매핑 ====================
 korean_name_map = {
-     # ==================== 코스피 대형주 ====================
+  # ==================== 코스피 대형주 ====================
     "005930.KS": "삼성전자", "000660.KS": "SK하이닉스", "207940.KS": "삼성바이오로직스",
     "373220.KS": "LG에너지솔루션", "005380.KS": "현대차", "000270.KS": "기아",
     "005490.KS": "POSCO홀딩스", "028260.KS": "삼성물산", "012330.KS": "현대모비스",
@@ -83,6 +83,7 @@ korean_name_map = {
 
 popular_stocks = {v: k for k, v in korean_name_map.items()}
 
+# ==================== 검색 ====================
 search_query = st.text_input("회사명 또는 종목코드 검색", placeholder="삼성전자, 005930, AAPL...")
 
 ticker = "005930.KS"
@@ -173,7 +174,6 @@ try:
             st.subheader("📊 1일 봉 차트 분석")
 
             daily_df = stock.history(period="1y", interval="1d")
-
             delta = daily_df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
